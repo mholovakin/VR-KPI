@@ -86,6 +86,6 @@ void main() {
     gl_FragColor = dotColor;
   }
   else{
-    gl_FragColor = vec4(vertColor, 1.0) * texture2D(tmu, v_texCoord);
+    gl_FragColor = texture2D(tmu, v_texCoord);
   }
 }`;

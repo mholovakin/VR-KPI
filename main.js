@@ -4,6 +4,7 @@ let gl; // The webgl context.
 let surface; // A surface model
 let shProgram; // A shader program
 let spaceball; // A SimpleRotator object that lets the user rotate the view by mouse.
+let stereoCamera;
 let xVal = 1;
 let yVal = 0;
 let zVal = 0;
@@ -47,7 +48,7 @@ function Model(name) {
 
     this.Draw = function() {
 
-        gl.uniform1i(shProgram.iDrawPoint, false);
+        // gl.uniform1i(shProgram.iDrawPoint, false);
         gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer);
         gl.vertexAttribPointer(shProgram.iAttribVertex, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(shProgram.iAttribVertex);
@@ -62,8 +63,8 @@ function Model(name) {
 
         gl.drawArrays(gl.TRIANGLES_STRIP, 0, this.count);
 
-        gl.uniform1i(shProgram.iDrawPoint, true);
-        gl.drawArrays(gl.POINTS, 0, 1);
+        // gl.uniform1i(shProgram.iDrawPoint, true);
+        // gl.drawArrays(gl.POINTS, 0, 1);
 
     }
 }
@@ -103,18 +104,46 @@ function ShaderProgram(name, program) {
 }
 
 
+function leftFrustum(stereoCamera) {
+    const { eyeSeparation, convergence, aspectRatio, fov, near, far } = stereoCamera;
+    const top = near * Math.tan(fov / 2);
+    const bottom = -top;
+
+    const a = aspectRatio * Math.tan(fov / 2) * convergence;
+    const b = a - eyeSeparation / 2;
+    const c = a + eyeSeparation / 2;
+
+    const left = -b * near / convergence;
+    const right = c * near / convergence;
+
+    return m4.frustum(left, right, bottom, top, near, far);
+}
+
+function rightFrustum(stereoCamera) {
+    const { eyeSeparation, convergence, aspectRatio, fov, near, far } = stereoCamera;
+    const top = near * Math.tan(fov / 2);
+    const bottom = -top;
+
+    const a = aspectRatio * Math.tan(fov / 2) * convergence;
+    const b = a - eyeSeparation / 2;
+    const c = a + eyeSeparation / 2;
+
+    const left = -c * near / convergence;
+    const right = b * near / convergence;
+    return m4.frustum(left, right, bottom, top, near, far);
+}
+
+
 /* Draws a colored cube, along with a set of coordinate axes.
  * (Note that the use of the above drawPrimitive function is not an efficient
  * way to draw with WebGL.  Here, the geometry is so simple that it doesn't matter.)
  */
-function draw() {
-    gl.clearColor(0, 0, 0, 1);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
+function drawLeft() {
     const lDir = [xVal, yVal, zVal];
 
     /* Set the values of the projection transformation */
-    const projection = m4.orthographic(-10, 10, -10, 10, -40, 40);
+    const projection = leftFrustum(stereoCamera);
 
     /* Get the view matrix from the SimpleRotator object.*/
     const modelView = spaceball.getViewMatrix();
@@ -143,11 +172,63 @@ function draw() {
     gl.uniform1f(shProgram.iScaleLocation, scale);
     gl.uniform1f(shProgram.iOffsetLocation, offset);
 
-    gl.uniform3fv(shProgram.iPointWorldLocation, getPointLocation());
-    gl.uniform2fv(shProgram.iPointLocation,[deg2rad(pX) / (2 * 180), deg2rad(pY) / (2*180)]);
+    // gl.uniform3fv(shProgram.iPointWorldLocation, getPointLocation());
+    // gl.uniform2fv(shProgram.iPointLocation,[deg2rad(pX) / (2 * 180), deg2rad(pY) / (2*180)]);
 
     surface.Draw();
 }
+
+
+function drawRight() {
+    const lDir = [xVal, yVal, zVal];
+
+    /* Set the values of the projection transformation */
+    const projection = rightFrustum(stereoCamera);
+
+    /* Get the view matrix from the SimpleRotator object.*/
+    const modelView = spaceball.getViewMatrix();
+
+    const rotateToPointZero = m4.axisRotation([0.707, 0.707, 0], 0.7);
+    const translateToPointZero = m4.translation(0, 0, -10);
+
+    const matAccum0 = m4.multiply(rotateToPointZero, modelView);
+    const matAccum1 = m4.multiply(translateToPointZero, matAccum0);
+
+    const modelViewProjection = m4.multiply(projection, matAccum1);
+
+    const modelviewInv = m4.inverse(matAccum1, new Float32Array(16));
+    const normalMatrix = m4.transpose(modelviewInv, new Float32Array(16));
+
+    gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, modelViewProjection);
+    gl.uniformMatrix4fv(shProgram.iNormalMatrix, false, normalMatrix);
+
+    gl.uniform1f(shProgram.iShininess, 10.0);
+    gl.uniform3fv(shProgram.iLightDir, lDir);
+    gl.uniform3fv(shProgram.iAmbientColor, [0.1, 0.1, 0.7]);
+    gl.uniform3fv(shProgram.iDiffuseColor, [0, 0.368, 0.721]);
+
+    gl.uniform4fv(shProgram.iColor, [1, 1, 0, 1]);
+
+    gl.uniform1f(shProgram.iScaleLocation, scale);
+    gl.uniform1f(shProgram.iOffsetLocation, offset);
+
+    // gl.uniform3fv(shProgram.iPointWorldLocation, getPointLocation());
+    // gl.uniform2fv(shProgram.iPointLocation,[deg2rad(pX) / (2 * 180), deg2rad(pY) / (2*180)]);
+
+    surface.Draw();
+}
+
+
+function draw(){
+    gl.clearColor(0,0,0,1);
+    gl.clear(gl.DEPTH_BUFFER_BIT);
+    gl.colorMask(false, true, true, true);
+    drawLeft();
+    gl.clear(gl.DEPTH_BUFFER_BIT);
+    gl.colorMask(true, false, false, true);
+    drawRight();
+}
+
 
 function f(u, v) {
     return Math.acos(-3 * (Math.cos(u) + Math.cos(v)) / (3 + 4 * Math.cos(u) * Math.cos(v)));
@@ -218,12 +299,23 @@ function initGL() {
     shProgram.iScaleLocation = gl.getUniformLocation(prog, 'u_scale');
     shProgram.iOffsetLocation = gl.getUniformLocation(prog, 'u_offset');
 
-    shProgram.iPointWorldLocation = gl.getUniformLocation(prog, "PointWorldLocation");
-    shProgram.iPointLocation = gl.getUniformLocation(prog, "UserPointLocation");
-    shProgram.iDrawPoint = gl.getUniformLocation(prog, "DrawPoint");
+    // shProgram.iPointWorldLocation = gl.getUniformLocation(prog, "PointWorldLocation");
+    // shProgram.iPointLocation = gl.getUniformLocation(prog, "UserPointLocation");
+    // shProgram.iDrawPoint = gl.getUniformLocation(prog, "DrawPoint");
 
     surface = new Model('Surface');
     surface.BufferData(CreateSurfaceData());
+
+    const ap = gl.canvas.width / gl.canvas.height;
+
+    stereoCamera = {
+        eyeSeparation: 0.004,
+        convergence: 1,
+        aspectRatio: ap,
+        fov: deg2rad(80),
+        near: 0.0001,
+        far: 20,
+    };
 
     gl.enable(gl.DEPTH_TEST);
 }
