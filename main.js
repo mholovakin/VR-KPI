@@ -4,6 +4,8 @@ let gl; // The webgl context.
 let surface; // A surface model
 let shProgram; // A shader program
 let spaceball; // A SimpleRotator object that lets the user rotate the view by mouse.
+let stereoCamera;
+let background, texture, webcamTexture, video;
 let xVal = 1;
 let yVal = 0;
 let zVal = 0;
@@ -24,7 +26,6 @@ function Model(name) {
     this.iVertexBuffer = gl.createBuffer();
     this.iNormalBuffer = gl.createBuffer();
     this.iTextureBuffer = gl.createBuffer();
-    this.iPointBuffer = gl.createBuffer();
 
     this.count = 0;
 
@@ -39,15 +40,12 @@ function Model(name) {
         gl.bindBuffer(gl.ARRAY_BUFFER, this.iTextureBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureList), gl.STREAM_DRAW);
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.iPointBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, 0, 0]), gl.STREAM_DRAW);
-
         this.count = vertexList.length / 3;
     }
 
     this.Draw = function() {
 
-        gl.uniform1i(shProgram.iDrawPoint, false);
+        // gl.uniform1i(shProgram.iDrawPoint, false);
         gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer);
         gl.vertexAttribPointer(shProgram.iAttribVertex, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(shProgram.iAttribVertex);
@@ -61,12 +59,22 @@ function Model(name) {
         gl.enableVertexAttribArray(shProgram.iTexCoord);
 
         gl.drawArrays(gl.TRIANGLES_STRIP, 0, this.count);
-
-        gl.uniform1i(shProgram.iDrawPoint, true);
-        gl.drawArrays(gl.POINTS, 0, 1);
-
     }
+
+    this.DrawBG = function () {
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer);
+        gl.vertexAttribPointer(shProgram.iAttribVertex, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(shProgram.iAttribVertex);
+    
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.iTextureBuffer);
+        gl.vertexAttribPointer(shProgram.iTextureCoords, 2, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(shProgram.iTextureCoords);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, this.count);
+      }
+
 }
+
 
 
 // Constructor
@@ -102,36 +110,90 @@ function ShaderProgram(name, program) {
     };
 }
 
+class StereoCameraObject {
+    constructor(eyeSeparation, convergence, aspectRatio, fov, near, far) {
+        this.eyeSeparation = eyeSeparation;
+        this.convergence = convergence;
+        this. aspectRatio = aspectRatio;
+        this.fov = fov;
+        this.near = near;
+        this.far = far;
+    }
+};
 
 /* Draws a colored cube, along with a set of coordinate axes.
  * (Note that the use of the above drawPrimitive function is not an efficient
  * way to draw with WebGL.  Here, the geometry is so simple that it doesn't matter.)
  */
-function draw() {
+
+
+function draw(){
+    const lDir = [xVal, yVal, zVal];
     gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    const lDir = [xVal, yVal, zVal];
-
     /* Set the values of the projection transformation */
     const projection = m4.orthographic(-10, 10, -10, 10, -40, 40);
+
+    let top, bottom, left, right;
+
+    top = stereoCamera.near * Math.tan(stereoCamera.fov / 2);
+    bottom = -top;
+
+    const a = stereoCamera.aspectRatio * Math.tan(stereoCamera.fov / 2) * stereoCamera.convergence;
+    const b = a - stereoCamera.eyeSeparation / 2;
+    const c = a + stereoCamera.eyeSeparation / 2;
+
+    left = -b * stereoCamera.near / stereoCamera.convergence;
+    right = c * stereoCamera.near / stereoCamera.convergence;
+
+    const projectionLeft = m4.frustum(left, right, bottom, top, stereoCamera.near, stereoCamera.far);
+
+    left = -c * stereoCamera.near / stereoCamera.convergence;
+    right = b * stereoCamera.near / stereoCamera.convergence;
+
+    const projectionRight = m4.frustum(left, right, bottom, top, stereoCamera.near, stereoCamera.far);
 
     /* Get the view matrix from the SimpleRotator object.*/
     const modelView = spaceball.getViewMatrix();
 
     const rotateToPointZero = m4.axisRotation([0.707, 0.707, 0], 0.7);
     const translateToPointZero = m4.translation(0, 0, -10);
+    const translateToLeft = m4.translation(-0.03, 0, -10);
+    const translateToRight = m4.translation(0.03, 0, -10);
 
     const matAccum0 = m4.multiply(rotateToPointZero, modelView);
     const matAccum1 = m4.multiply(translateToPointZero, matAccum0);
 
+    const matAccum1Left = m4.multiply(translateToLeft, matAccum0);
+    const matAccum1Right = m4.multiply(translateToRight, matAccum0);
+
     const modelViewProjection = m4.multiply(projection, matAccum1);
+
+
+    const modelViewLeftProjection = m4.multiply(projectionLeft, matAccum1Left);
+    const modelViewRightProjection = m4.multiply(projectionRight, matAccum1Right);
 
     const modelviewInv = m4.inverse(matAccum1, new Float32Array(16));
     const normalMatrix = m4.transpose(modelviewInv, new Float32Array(16));
 
     gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, modelViewProjection);
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        gl.bindTexture(gl.TEXTURE_2D, webcamTexture);
+        gl.texImage2D(
+          gl.TEXTURE_2D,
+          0,
+          gl.RGBA,
+          gl.RGBA,
+          gl.UNSIGNED_BYTE,
+          video,
+        );
+        background.DrawBG();
+      } else {
+        console.log('Video stream not ready');
+      }
     gl.uniformMatrix4fv(shProgram.iNormalMatrix, false, normalMatrix);
+
 
     gl.uniform1f(shProgram.iShininess, 10.0);
     gl.uniform3fv(shProgram.iLightDir, lDir);
@@ -142,12 +204,24 @@ function draw() {
 
     gl.uniform1f(shProgram.iScaleLocation, scale);
     gl.uniform1f(shProgram.iOffsetLocation, offset);
+    
 
-    gl.uniform3fv(shProgram.iPointWorldLocation, getPointLocation());
-    gl.uniform2fv(shProgram.iPointLocation,[deg2rad(pX) / (2 * 180), deg2rad(pY) / (2*180)]);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.clear(gl.DEPTH_BUFFER_BIT);
 
+    gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, modelViewLeftProjection);
+    gl.colorMask(true, false, false, false);
     surface.Draw();
+
+    gl.clear(gl.DEPTH_BUFFER_BIT);
+
+    gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, modelViewRightProjection);
+    gl.colorMask(false, true, true, false);
+    surface.Draw();
+
+    gl.colorMask(true, true, true, true);
 }
+
 
 function f(u, v) {
     return Math.acos(-3 * (Math.cos(u) + Math.cos(v)) / (3 + 4 * Math.cos(u) * Math.cos(v)));
@@ -218,16 +292,40 @@ function initGL() {
     shProgram.iScaleLocation = gl.getUniformLocation(prog, 'u_scale');
     shProgram.iOffsetLocation = gl.getUniformLocation(prog, 'u_offset');
 
-    shProgram.iPointWorldLocation = gl.getUniformLocation(prog, "PointWorldLocation");
-    shProgram.iPointLocation = gl.getUniformLocation(prog, "UserPointLocation");
-    shProgram.iDrawPoint = gl.getUniformLocation(prog, "DrawPoint");
+    // shProgram.iPointWorldLocation = gl.getUniformLocation(prog, "PointWorldLocation");
+    // shProgram.iPointLocation = gl.getUniformLocation(prog, "UserPointLocation");
+    // shProgram.iDrawPoint = gl.getUniformLocation(prog, "DrawPoint");
 
     surface = new Model('Surface');
     surface.BufferData(CreateSurfaceData());
 
+    stereoCamera = new StereoCameraObject(0.005, 1, gl.canvas.width / gl.canvas.height, deg2rad(50), 0.001, 30);
+    
+    background = new Model('Background');
+    background.BufferData({
+        vertexList: [
+            0,0,0,
+            1,0,0,
+            1,1,0,
+            1,1,0,
+            0,1,0,
+            0,0,0],
+        textureList: [
+            1,1,0,
+            1,0,0,
+            0,0,1,
+            0,1,1]
+        });
+    
+    LoadTexture();
+
     gl.enable(gl.DEPTH_TEST);
 }
 
+function infiniteDraw() {
+    draw();
+    window.requestAnimationFrame(infiniteDraw);
+  }
 
 /* Creates a program for use in the WebGL context gl, and returns the
  * identifier for that program.  If an error occurs while compiling or
@@ -266,9 +364,16 @@ function createProgram(gl, vShader, fShader) {
  */
 function init() {
     let canvas;
+    video = document.createElement('video');
+    video.setAttribute('autoplay', 'true');
+    window.vid = video;
+
     try {
         canvas = document.getElementById("webglcanvas");
         gl = canvas.getContext("webgl");
+        
+        getWebcam();
+        webcamTexture = createWebcamTexture(gl);
         if (!gl) {
             throw "Browser does not support WebGL";
         }
@@ -287,167 +392,65 @@ function init() {
 
     spaceball = new TrackballRotator(canvas, draw, 0);
 
-    createTexture();
-}
+    const eyeSeparation = document.getElementById("eyeSeparation");
+    const convergence = document.getElementById("convergence");
+    const fov = document.getElementById("fov");
+    const near = document.getElementById("near");
 
-function getPointLocation(){
-    let pointList = [];
-    let x,y,z;
-
-    x = deg2rad(pX);
-    y = deg2rad(pY);
-    z = f(x, y);
-
-    pointList.push(x,y,z);
-    
-    return pointList;
-}
-
-function createTexture() {
-
-    let texture = gl.createTexture();
-
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
-        new Uint8Array([255, 255, 255, 255]));
-
-    let img = new Image();
-    img.crossOrigin = "anonymous";
-    img.src = 'https://www.manytextures.com/download/36/texture/jpg/512/red-brick-wall-512x512.jpg';
-    img.addEventListener('load', function() {
-        gl.bindTexture(gl.TEXTURE_2D, texture);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+    const getStereoCameraValues = () => {
+        stereoCamera.eyeSeparation = parseFloat(eyeSeparation.value);
+        stereoCamera.convergence = parseFloat(convergence.value);
+        stereoCamera.fov = deg2rad(parseFloat(fov.value));
+        stereoCamera.near = parseFloat(near.value);
         draw();
+    }
+
+    eyeSeparation.addEventListener("input", getStereoCameraValues);
+    convergence.addEventListener("input", getStereoCameraValues);
+    fov.addEventListener("input", getStereoCameraValues);
+    near.addEventListener("input", getStereoCameraValues);
+
+    infiniteDraw();
+}
+
+
+async function LoadImage() {
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      image.src = 'https://www.manytextures.com/download/36/texture/jpg/512/red-brick-wall-512x512.jpg';
+      image.crossOrigin = 'anonymous';
+      image.addEventListener('load', function () {
+        resolve(image);
+      });
     });
 }
-
-const onArrowLeftKeyX = () => {
-    if (xVal < -25){
-        xVal = -25;
-        draw();
-    }
-    else if (xVal > 25) {
-        xVal = 25;
-    }
-    xVal -= 1;
-    draw();
-}
-
-const onArrowRightKeyX = () => {
-    if (xVal < -25){
-        xVal = -25;
-        draw();
-    }
-    else if (xVal > 25) {
-        xVal = 25;
-    }
-    xVal += 1;
-    draw();
-}
-
-const onArrowLeftKeyY = () => {
-    if (yVal < -25){
-        yVal = -25;
-        draw();
-    }
-    else if (yVal > 25) {
-        yVal = 25;
-    }
-    yVal -= 1;
-    draw();
-}
-
-const onArrowRightKeyY = () => {
-    if (yVal < -25){
-        yVal = -25;
-        draw();
-    }
-    else if (yVal > 25) {
-        yVal = 25;
-    }
-    yVal += 1;
-    draw();
+  
+const LoadTexture = async () => {
+    const image = await LoadImage();
+    texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
 }
 
 
-const onArrowLeftKeyZ = () => {
-    if (zVal < -25){
-        zVal = -25;
-        draw();
-    }
-    else if (zVal > 25) {
-        zVal = 25;
-    }
-    zVal -= 1;
-    draw();
+function getWebcam() {
+    navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+      .then(function (stream) {
+        video.srcObject = stream;
+      })
+      .catch(function (error) {
+        console.error('Error accessing the webcam:', error);
+      });
 }
 
-const onArrowRightKeyZ = () => {
-    if (zVal < -25){
-        zVal = -25;
-        draw();
-    }
-    else if (zVal > 25) {
-        zVal = 25;
-    }
-    zVal += 1;
-    draw();
+const createWebcamTexture = (gl) => {
+    const texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    return texture;
 }
-
-let keysPressed = {};
-document.addEventListener('keydown', (event) => {
-    keysPressed[event.key] = true;
- 
-    if (keysPressed['x'] && event.key == 'ArrowLeft') {
-        onArrowLeftKeyX();
-    }
-    if (keysPressed['x'] && event.key == 'ArrowRight') {
-        onArrowRightKeyX();
-    }
-    if (keysPressed['y'] && event.key == 'ArrowLeft') {
-        onArrowLeftKeyY();
-    }
-    if (keysPressed['y'] && event.key == 'ArrowRight') {
-        onArrowRightKeyY();
-    }
-    if (keysPressed['z'] && event.key == 'ArrowLeft') {
-        onArrowLeftKeyZ();
-    }
-    if (keysPressed['z'] && event.key == 'ArrowRight') {
-        onArrowRightKeyZ();
-    }
-    if (event.key == 'w'){
-        pY += 10.0;
-        draw();
-    } 
-    if (event.key == 's'){
-        pY -= 10.0;
-        draw();
-    } 
-    if (event.key == 'a'){
-        pX -= 10.0;
-        draw();
-    } 
-    if (event.key == 'd'){
-        pX += 10.0;
-        draw();
-    } 
-    if (event.key == 'o'){
-        scale -= 1;
-        console.log(scale);
-        draw();
-    }
-    if (event.key == 'p'){
-        scale += 1;
-        console.log(scale);
-        draw();
-    }
- });
- 
- document.addEventListener('keyup', (event) => {
-    delete keysPressed[event.key];
- });
