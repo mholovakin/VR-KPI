@@ -9,7 +9,6 @@ let background, texture, webcamTexture, video;
 let xVal = 1;
 let yVal = 0;
 let zVal = 0;
-let track;
 
 let scale = -35.0;
 let offset = 0.0;
@@ -62,7 +61,20 @@ function Model(name) {
         gl.drawArrays(gl.TRIANGLES_STRIP, 0, this.count);
     }
 
+    this.DrawBG = function () {
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer);
+        gl.vertexAttribPointer(shProgram.iAttribVertex, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(shProgram.iAttribVertex);
+    
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.iTextureBuffer);
+        gl.vertexAttribPointer(shProgram.iTextureCoords, 2, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(shProgram.iTextureCoords);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, this.count);
+      }
+
 }
+
 
 
 // Constructor
@@ -117,6 +129,8 @@ class StereoCameraObject {
 
 function draw(){
     const lDir = [xVal, yVal, zVal];
+    gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     /* Set the values of the projection transformation */
     const projection = m4.orthographic(-10, 10, -10, 10, -40, 40);
@@ -149,27 +163,13 @@ function draw(){
     const translateToRight = m4.translation(0.03, 0, -10);
 
     const matAccum0 = m4.multiply(rotateToPointZero, modelView);
-    
     const matAccum1 = m4.multiply(translateToPointZero, matAccum0);
 
     const matAccum1Left = m4.multiply(translateToLeft, matAccum0);
     const matAccum1Right = m4.multiply(translateToRight, matAccum0);
 
     const modelViewProjection = m4.multiply(projection, matAccum1);
-    
-    gl.bindTexture(gl.TEXTURE_2D, webcamTexture);
-    gl.texImage2D(
-    gl.TEXTURE_2D,
-    0,
-    gl.RGBA,
-    gl.RGBA,
-    gl.UNSIGNED_BYTE,
-    video,
-    );
-    background.Draw();
 
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.clear(gl.DEPTH_BUFFER_BIT);
 
     const modelViewLeftProjection = m4.multiply(projectionLeft, matAccum1Left);
     const modelViewRightProjection = m4.multiply(projectionRight, matAccum1Right);
@@ -178,6 +178,20 @@ function draw(){
     const normalMatrix = m4.transpose(modelviewInv, new Float32Array(16));
 
     gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, modelViewProjection);
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        gl.bindTexture(gl.TEXTURE_2D, webcamTexture);
+        gl.texImage2D(
+          gl.TEXTURE_2D,
+          0,
+          gl.RGBA,
+          gl.RGBA,
+          gl.UNSIGNED_BYTE,
+          video,
+        );
+        background.DrawBG();
+      } else {
+        console.log('Video stream not ready');
+      }
     gl.uniformMatrix4fv(shProgram.iNormalMatrix, false, normalMatrix);
 
 
@@ -191,16 +205,18 @@ function draw(){
     gl.uniform1f(shProgram.iScaleLocation, scale);
     gl.uniform1f(shProgram.iOffsetLocation, offset);
     
-    // surface.Draw();
 
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.clear(gl.DEPTH_BUFFER_BIT);
 
     gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, modelViewLeftProjection);
-    gl.colorMask(false, true, true, true);
+    gl.colorMask(true, false, false, false);
     surface.Draw();
 
     gl.clear(gl.DEPTH_BUFFER_BIT);
-    gl.colorMask(true, false, false, true);
+
     gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, modelViewRightProjection);
+    gl.colorMask(false, true, true, false);
     surface.Draw();
 
     gl.colorMask(true, true, true, true);
@@ -288,16 +304,19 @@ function initGL() {
     background = new Model('Background');
     background.BufferData({
         vertexList: [
-        0.0, 0.0, 0.0, 1.0,
-        0.0, 0.0, 1.0, 1.0,
-        0.0, 1.0, 1.0, 0.0,
-        0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
-        normalList: [
-        1, 1, 0, 1,
-        0, 0, 0, 0,
-        1, 0, 1, 1
-    ]
-});
+            0,0,0,
+            1,0,0,
+            1,1,0,
+            1,1,0,
+            0,1,0,
+            0,0,0],
+        textureList: [
+            1,1,0,
+            1,0,0,
+            0,0,1,
+            0,1,1]
+        });
+    
     LoadTexture();
 
     gl.enable(gl.DEPTH_TEST);
@@ -345,11 +364,14 @@ function createProgram(gl, vShader, fShader) {
  */
 function init() {
     let canvas;
+    video = document.createElement('video');
+    video.setAttribute('autoplay', 'true');
+    window.vid = video;
+
     try {
         canvas = document.getElementById("webglcanvas");
         gl = canvas.getContext("webgl");
-        video = document.createElement('video');
-        video.setAttribute('autoplay', 'true');
+        
         getWebcam();
         webcamTexture = createWebcamTexture(gl);
         if (!gl) {
@@ -370,9 +392,6 @@ function init() {
 
     spaceball = new TrackballRotator(canvas, draw, 0);
 
-    infiniteDraw();
-
-
     const eyeSeparation = document.getElementById("eyeSeparation");
     const convergence = document.getElementById("convergence");
     const fov = document.getElementById("fov");
@@ -391,6 +410,7 @@ function init() {
     fov.addEventListener("input", getStereoCameraValues);
     near.addEventListener("input", getStereoCameraValues);
 
+    infiniteDraw();
 }
 
 
@@ -403,7 +423,7 @@ async function LoadImage() {
         resolve(image);
       });
     });
-  }
+}
   
 const LoadTexture = async () => {
     const image = await LoadImage();
@@ -412,18 +432,20 @@ const LoadTexture = async () => {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
-  };
+}
 
-  function getWebcam() {
-    navigator.getUserMedia({ video: true, audio: false }, function (stream) {
-      video.srcObject = stream;
-      track = stream.getTracks()[0];
-    }, function (e) {});
-  }
-  
 
- 
-  const createWebcamTexture = (gl) => {
+function getWebcam() {
+    navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+      .then(function (stream) {
+        video.srcObject = stream;
+      })
+      .catch(function (error) {
+        console.error('Error accessing the webcam:', error);
+      });
+}
+
+const createWebcamTexture = (gl) => {
     const texture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
@@ -431,4 +453,4 @@ const LoadTexture = async () => {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     return texture;
-  };
+}
