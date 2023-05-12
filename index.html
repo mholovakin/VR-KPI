@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+
+    <title>CGW</title>
+    <style>
+        body {
+            background-color: #EEEEEE;
+        }
+    </style>
+
+    <script src="./Utils/trackball-rotator.js"></script>
+    <script src="./Utils/m4.js"></script>
+    <script src="./shader.gpu"></script>
+    <script src="./main.js"></script>
+
+</head>
+
+<body onload="init()">
+
+    <h2>CGW Variant 5 Mykyta Holovakin TR-22mp</h2>
+    <h3>The Neovious' Surface with "Trackball" Mouse Rotation</h3>
+
+    <br/><br/>
+    <p>
+        <b>Light Directional - </b>
+        <b>Shading Gouraud - </b>
+        <b>Projection Ortho - </b>
+        <b>Normal Analytic -</b>
+        <b>Light path lineSeg</b>
+    </p>
+    <p>
+    Hold <b><i>X, Y</i></b> or <b><i>Z</i></b> and press <b><i>Left Arrow</i></b> or <b><i>Right Arrow</i></b> to rotate light source
+</p>
+<p>
+    Press <b><i>O</i></b> or <b><i>P</i></b> to scale texture
+</p>
+<p>
+    Use <b><i>WASD</i></b> to move the pointer
+</p>
+
+    <div id="canvas-holder">
+        <canvas width="600" height="600" id="webglcanvas" style="background-color:red"></canvas>
+    </div>
+
+</body>
+
+</html>
