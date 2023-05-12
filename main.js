@@ -530,12 +530,10 @@ document.addEventListener('keydown', (event) => {
     } 
     if (event.key == 'o'){
         scale -= 1;
-        console.log(scale);
         draw();
     }
     if (event.key == 'p'){
         scale += 1;
-        console.log(scale);
         draw();
     }
  });
