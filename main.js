@@ -172,13 +172,10 @@ function draw(){
 
     let modelView;
     if (deviceOrientation.checked && lastEvent.alpha && lastEvent.beta && lastEvent.gamma) {
-        const alphaRadians = lastEvent.alpha;
-        const betaRadians = lastEvent.beta;
-        const gammaRadians = lastEvent.gamma;
 
-        const rotationZ = m4.axisRotation([0,0,1], alphaRadians);
-        const rotationX = m4.axisRotation([1,0,0], -betaRadians);
-        const rotationY = m4.axisRotation([0,1,0], gammaRadians);
+        const rotationZ = m4.axisRotation([0,0,1], lastEvent.alpha);
+        const rotationX = m4.axisRotation([1,0,0], -lastEvent.beta);
+        const rotationY = m4.axisRotation([0,1,0], lastEvent.gamma);
         const rotation = m4.multiply(m4.multiply(rotationX, rotationY), rotationZ);
         const translation = m4.translation(0, 0, -5);
         modelView = m4.multiply(rotation, translation);
