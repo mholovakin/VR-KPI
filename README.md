@@ -2,6 +2,8 @@
 
 The Neovious' Surface with "Trackball" Mouse Rotation
 
+New availability: rotate using accelerometer **(IPHONE ONLY)**
+
 [Try it yourself!](https://mholovakin.github.io/VR-KPI/)
 
 Animation:
