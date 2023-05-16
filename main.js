@@ -16,6 +16,19 @@ let offset = 0.0;
 let pX = 0.0;
 let pY = 0.0;
 
+
+let lastHandler = null;
+
+const lastEvent = {
+    alpha: 0,
+    beta: 0,
+    gamma: 0,
+    event: null,
+};
+
+let deviceOrientation;
+
+
 function deg2rad(angle) {
     return angle * Math.PI / 180;
 }
@@ -155,29 +168,45 @@ function draw(){
     const projectionRight = m4.frustum(left, right, bottom, top, stereoCamera.near, stereoCamera.far);
 
     /* Get the view matrix from the SimpleRotator object.*/
-    const modelView = spaceball.getViewMatrix();
+    // const modelView = spaceball.getViewMatrix();
+
+    let modelView;
+    if (deviceOrientation.checked && lastEvent.alpha && lastEvent.beta && lastEvent.gamma) {
+        const alphaRadians = lastEvent.alpha;
+        const betaRadians = lastEvent.beta;
+        const gammaRadians = lastEvent.gamma;
+
+        const rotationZ = m4.axisRotation([0,0,1], alphaRadians);
+        const rotationX = m4.axisRotation([1,0,0], -betaRadians);
+        const rotationY = m4.axisRotation([0,1,0], gammaRadians);
+        const rotation = m4.multiply(m4.multiply(rotationX, rotationY), rotationZ);
+        const translation = m4.translation(0, 0, -5);
+        modelView = m4.multiply(rotation, translation);
+    } else {
+        modelView = spaceball.getViewMatrix();
+    }
 
     const rotateToPointZero = m4.axisRotation([0.707, 0.707, 0], 0.7);
-    const translateToPointZero = m4.translation(0, 0, -10);
+    // const translateToPointZero = m4.translation(0, 0, -10);
     const translateToLeft = m4.translation(-0.03, 0, -10);
     const translateToRight = m4.translation(0.03, 0, -10);
 
-    const matAccum0 = m4.multiply(rotateToPointZero, modelView);
-    const matAccum1 = m4.multiply(translateToPointZero, matAccum0);
+    // const matAccum0 = m4.multiply(rotateToPointZero, modelView);
+    // const matAccum1 = m4.multiply(translateToPointZero, matAccum0);
 
-    const matAccum1Left = m4.multiply(translateToLeft, matAccum0);
-    const matAccum1Right = m4.multiply(translateToRight, matAccum0);
+    const matAccum1Left = m4.multiply(translateToLeft, modelView);
+    const matAccum1Right = m4.multiply(translateToRight, modelView);
 
-    const modelViewProjection = m4.multiply(projection, matAccum1);
+    // const modelViewProjection = m4.multiply(projection, matAccum1);
 
 
     const modelViewLeftProjection = m4.multiply(projectionLeft, matAccum1Left);
     const modelViewRightProjection = m4.multiply(projectionRight, matAccum1Right);
 
-    const modelviewInv = m4.inverse(matAccum1, new Float32Array(16));
-    const normalMatrix = m4.transpose(modelviewInv, new Float32Array(16));
+    // const modelviewInv = m4.inverse(matAccum1, new Float32Array(16));
+    // const normalMatrix = m4.transpose(modelviewInv, new Float32Array(16));
 
-    gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, modelViewProjection);
+    // gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, modelViewProjection);
     if (video.readyState === video.HAVE_ENOUGH_DATA) {
         gl.bindTexture(gl.TEXTURE_2D, webcamTexture);
         gl.texImage2D(
@@ -192,7 +221,7 @@ function draw(){
       } else {
         console.log('Video stream not ready');
       }
-    gl.uniformMatrix4fv(shProgram.iNormalMatrix, false, normalMatrix);
+    // gl.uniformMatrix4fv(shProgram.iNormalMatrix, false, normalMatrix);
 
 
     gl.uniform1f(shProgram.iShininess, 10.0);
@@ -228,7 +257,7 @@ function f(u, v) {
     }
 
 function CreateSurfaceData() {
-    const step = .5;
+    const step = 1;
     const min = -180;
     const max = 180;
 
@@ -371,9 +400,10 @@ function init() {
     try {
         canvas = document.getElementById("webglcanvas");
         gl = canvas.getContext("webgl");
-        
+        deviceOrientation = document.getElementById('accelerometer-tangible-interface');
         getWebcam();
         webcamTexture = createWebcamTexture(gl);
+        handleRequestButton();
         if (!gl) {
             throw "Browser does not support WebGL";
         }
@@ -454,3 +484,49 @@ const createWebcamTexture = (gl) => {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     return texture;
 }
+
+
+const requestDeviceOrientation = async () => {
+  if (typeof DeviceOrientationEvent === 'undefined' || typeof DeviceOrientationEvent.requestPermission !== 'function') return;
+  try {
+    const permission = await DeviceOrientationEvent.requestPermission();
+    if (permission === 'granted') {
+      console.log('Permission granted');
+      window.removeEventListener('devicemotion', lastHandler, true);
+      lastHandler = e => {
+        lastEvent.alpha = Math.atan(e.acceleration.x, e.acceleration.z);
+        lastEvent.beta = Math.atan(-e.acceleration.y, (e.acceleration.x ** 2 + e.acceleration.z ** 2));
+        lastEvent.gamma = Math.atan(-e.acceleration.x, -e.acceleration.y);
+        lastEvent.event = e;
+      };
+      window.addEventListener('devicemotion', lastHandler, true);
+    }
+  } catch (e) {
+    console.error('No device orientation permission');
+  }
+};
+  
+
+const handleDeviceOrientation = () => {
+  const deviceOrientation = document.getElementById('accelerometer-tangible-interface');
+  if (deviceOrientation.checked) {
+    requestDeviceOrientation().catch(console.error);
+  } else {
+    window.removeEventListener('devicemotion', lastHandler, true);
+  }
+  deviceOrientation.addEventListener('change', async (e) => {
+    if (deviceOrientation.checked) {
+      requestDeviceOrientation().catch(console.error);
+    } else {
+      window.removeEventListener('devicemotion', lastHandler, true);
+    }
+  });
+
+};
+
+const handleRequestButton = () => {
+    const button = document.getElementById('request-accelerometer-tangible-interface');
+    button.addEventListener('click', () => {
+      handleDeviceOrientation();
+    });
+  };
