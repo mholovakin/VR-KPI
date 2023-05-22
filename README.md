@@ -8,7 +8,8 @@ New availability: rotate using accelerometer **(IPHONE ONLY)**
 
 Animation:
 
-![video](https://github.com/mholovakin/VR-KPI/blob/PA2/images/video.mp4)
+https://github.com/mholovakin/VR-KPI/assets/45340638/713089e1-14e8-4e65-9536-2901536b7a94
+
 
 But much funnier with z-axis translation to -5:
 
