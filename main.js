@@ -613,6 +613,7 @@ function AudioSetup() {
 }
 
 function StartAudio() {
+
   audio = document.getElementById('audio');
 
   audio.addEventListener('play', () => {
