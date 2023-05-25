@@ -4,7 +4,8 @@
 
 New availability: **Spatial audio!**  
 
-Example of work
+## Example of work
+
 Put on your headphones and start playing the video:
 
 
