@@ -1,15 +1,13 @@
 # VR-KPI
 
-The Neovious' Surface with "Trackball" Mouse Rotation
+## The Neovious' Surface with "Trackball" Mouse Rotation
 
-New availability: rotate using accelerometer **(IPHONE ONLY)**
+New availability: **Spatial audio!**  
 
-[Try it yourself!](https://mholovakin.github.io/VR-KPI/)
+Example of work
+Put on your headphones and start playing the video:
 
-Animation:
 
-![video](https://github.com/mholovakin/VR-KPI/blob/PA2/images/video.mp4)
 
-But much funnier with z-axis translation to -5:
+https://github.com/mholovakin/VR-KPI/assets/45340638/ae4163ab-902a-4829-a226-d8a482ea4151
 
-![gif](https://github.com/mholovakin/VR-KPI/blob/PA2/images/IMG_0730.gif)
