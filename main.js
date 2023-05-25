@@ -357,10 +357,8 @@ function sphereRotation(rotationTick, lengthOfRotation, distanceFromCenterX, dis
 
 function moveCircleSphere(rotationTick, lengthOfRotation, distanceFromCenterX, centerY, radius) {
   const angle = (rotationTick / lengthOfRotation) * Math.PI * 2;
-  const x = distanceFromCenterX + Math.cos(angle) * radius;
-  const z = centerY + Math.sin(angle) * radius;
-  xmusicSphere = x;
-  zmusicSphere = z;
+  xmusicSphere = distanceFromCenterX + Math.cos(angle) * radius;
+  zmusicSphere = centerY + Math.sin(angle) * radius;
 }
 
 
