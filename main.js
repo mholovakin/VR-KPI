@@ -5,7 +5,9 @@ let surface; // A surface model
 let shProgram; // A shader program
 let spaceball; // A SimpleRotator object that lets the user rotate the view by mouse.
 let stereoCamera;
+let sphere;
 let background, texture, webcamTexture, video;
+var audio, audioContext, source, panner, filter;
 let xVal = 1;
 let yVal = 0;
 let zVal = 0;
@@ -17,6 +19,7 @@ let pX = 0.0;
 let pY = 0.0;
 
 
+
 let lastHandler = null;
 
 const lastEvent = {
@@ -25,66 +28,68 @@ const lastEvent = {
     gamma: 0,
     event: null,
 };
-
 let deviceOrientation;
+
+
+const lengthOfRotation = 20;
+let rotationTick = 0;
+
+let xmusicSphere = 0;
+let ymusicSphere = 0;
+let zmusicSphere = 0;
+const radius = 1;
+
+const distanceFromCenterX = 0;
+const distanceFromCenterZ = -1.3;
 
 
 function deg2rad(angle) {
     return angle * Math.PI / 180;
 }
 
+
 // Constructor
+
+
 function Model(name) {
-    this.name = name;
-    this.iVertexBuffer = gl.createBuffer();
-    this.iNormalBuffer = gl.createBuffer();
-    this.iTextureBuffer = gl.createBuffer();
+  this.name = name;
+  this.iVertexBuffer = gl.createBuffer();
+  this.iNormalBuffer = gl.createBuffer();
+  this.iTextureBuffer = gl.createBuffer();
 
-    this.count = 0;
+  this.count = 0;
 
-    this.BufferData = function({vertexList, normalList, textureList}) {
+  this.BufferData = function({vertexList, normalList, textureList}) {
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexList), gl.STREAM_DRAW);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexList), gl.STREAM_DRAW);
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.iNormalBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normalList), gl.STREAM_DRAW);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.iNormalBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normalList), gl.STREAM_DRAW);
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.iTextureBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureList), gl.STREAM_DRAW);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.iTextureBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureList), gl.STREAM_DRAW);
 
-        this.count = vertexList.length / 3;
-    }
+      this.count = vertexList.length / 3;
+  }
 
-    this.Draw = function() {
+  this.Draw = function() {
 
-        // gl.uniform1i(shProgram.iDrawPoint, false);
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer);
-        gl.vertexAttribPointer(shProgram.iAttribVertex, 3, gl.FLOAT, false, 0, 0);
-        gl.enableVertexAttribArray(shProgram.iAttribVertex);
+      // gl.uniform1i(shProgram.iDrawPoint, false);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer);
+      gl.vertexAttribPointer(shProgram.iAttribVertex, 3, gl.FLOAT, false, 0, 0);
+      gl.enableVertexAttribArray(shProgram.iAttribVertex);
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.iNormalBuffer);
-        gl.vertexAttribPointer(shProgram.iAttribNormal, 3, gl.FLOAT, false, 0, 0);
-        gl.enableVertexAttribArray(shProgram.iAttribNormal);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.iNormalBuffer);
+      gl.vertexAttribPointer(shProgram.iAttribNormal, 3, gl.FLOAT, false, 0, 0);
+      gl.enableVertexAttribArray(shProgram.iAttribNormal);
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.iTextureBuffer);
-        gl.vertexAttribPointer(shProgram.iTexCoord, 2, gl.FLOAT, false, 0, 0);
-        gl.enableVertexAttribArray(shProgram.iTexCoord);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.iTextureBuffer);
+      gl.vertexAttribPointer(shProgram.iTexCoord, 2, gl.FLOAT, false, 0, 0);
+      gl.enableVertexAttribArray(shProgram.iTexCoord);
 
-        gl.drawArrays(gl.TRIANGLES_STRIP, 0, this.count);
-    }
-
-    this.DrawBG = function () {
-
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer);
-        gl.vertexAttribPointer(shProgram.iAttribVertex, 3, gl.FLOAT, false, 0, 0);
-        gl.enableVertexAttribArray(shProgram.iAttribVertex);
-    
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.iTextureBuffer);
-        gl.vertexAttribPointer(shProgram.iTextureCoords, 2, gl.FLOAT, false, 0, 0);
-        gl.enableVertexAttribArray(shProgram.iTextureCoords);
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, this.count);
-      }
+      gl.drawArrays(gl.Line_STRIP, 0, this.count);
+  }
 
 }
 
@@ -141,8 +146,15 @@ class StereoCameraObject {
 
 
 function draw(){
+  if (panner) {
+    let x = parseFloat(xmusicSphere);
+    let y = parseFloat(ymusicSphere);
+    let z = parseFloat(zmusicSphere);
+    panner.setPosition(x, y, z);
+  }
+
     const lDir = [xVal, yVal, zVal];
-    gl.clearColor(0, 0, 0, 1);
+    gl.clearColor(1, 1, 1, 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     /* Set the values of the projection transformation */
@@ -204,23 +216,35 @@ function draw(){
     // const normalMatrix = m4.transpose(modelviewInv, new Float32Array(16));
 
     // gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, modelViewProjection);
-    if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        gl.bindTexture(gl.TEXTURE_2D, webcamTexture);
-        gl.texImage2D(
-          gl.TEXTURE_2D,
-          0,
-          gl.RGBA,
-          gl.RGBA,
-          gl.UNSIGNED_BYTE,
-          video,
-        );
-        background.DrawBG();
-      } else {
-        console.log('Video stream not ready');
-      }
+    // if (video.readyState === video.HAVE_ENOUGH_DATA) {
+    //     gl.bindTexture(gl.TEXTURE_2D, webcamTexture);
+    //     gl.texImage2D(
+    //       gl.TEXTURE_2D,
+    //       0,
+    //       gl.RGBA,
+    //       gl.RGBA,
+    //       gl.UNSIGNED_BYTE,
+    //       video,
+    //     );
+    //     background.DrawBG();
+        
+    //   } else {
+    //     console.log('Video stream not ready');
+    //   }
     // gl.uniformMatrix4fv(shProgram.iNormalMatrix, false, normalMatrix);
 
 
+
+    const translationSphere = m4.translation(xmusicSphere, ymusicSphere, zmusicSphere);
+    let matAccum1Sphere = m4.multiply(translationSphere, modelView);
+    let modelViewProjectionSphere = m4.multiply(projectionLeft, matAccum1Sphere);
+
+    gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, modelViewProjectionSphere);
+
+
+    sphere.Draw();
+    gl.clear(gl.DEPTH_BUFFER_BIT);
+    
     gl.uniform1f(shProgram.iShininess, 10.0);
     gl.uniform3fv(shProgram.iLightDir, lDir);
     gl.uniform3fv(shProgram.iAmbientColor, [0.1, 0.1, 0.7]);
@@ -244,8 +268,9 @@ function draw(){
     gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, modelViewRightProjection);
     gl.colorMask(false, true, true, false);
     surface.Draw();
-
     gl.colorMask(true, true, true, true);
+
+
 }
 
 
@@ -292,6 +317,52 @@ function CreateSurfaceData() {
 
 }
 
+function createSphere(radius, latitudeBands, longitudeBands) {
+  const vertexList = [];
+
+  for (let l = 0; l <= latitudeBands; l++) {
+      const theta = (l * Math.PI) / latitudeBands;
+      const sinTheta = Math.sin(theta);
+      const cosTheta = Math.cos(theta);
+
+      for (let l = 0; l <= longitudeBands; l++) {
+          const phi = (l * 2 * Math.PI) / longitudeBands;
+          const sinPhi = Math.sin(phi);
+          const cosPhi = Math.cos(phi);
+
+          const x = radius * cosPhi * sinTheta;
+          const y = radius * cosTheta;
+          const z = radius * sinPhi * sinTheta;
+
+          vertexList.push(x, y, z);
+      }
+  }
+
+  return { vertexList: vertexList, normalList: null, textureList: null };
+}
+
+
+function sphereRotation(rotationTick, lengthOfRotation, distanceFromCenterX, distanceFromCenterZ, radius) {
+  return setInterval(() => {
+      if (rotationTick < lengthOfRotation) {
+          moveCircleSphere(rotationTick, lengthOfRotation, distanceFromCenterX, distanceFromCenterZ, radius);
+          rotationTick++;
+      } else {
+          rotationTick = 0;
+          moveCircleSphere(rotationTick, lengthOfRotation, distanceFromCenterX, distanceFromCenterZ, radius)
+      }
+  }, 200);
+}
+
+
+function moveCircleSphere(rotationTick, lengthOfRotation, distanceFromCenterX, centerY, radius) {
+  const angle = (rotationTick / lengthOfRotation) * Math.PI * 2;
+  const x = distanceFromCenterX + Math.cos(angle) * radius;
+  const z = centerY + Math.sin(angle) * radius;
+  xmusicSphere = x;
+  zmusicSphere = z;
+}
+
 
 /* Initialize the WebGL context. Called from init() */
 function initGL() {
@@ -325,24 +396,28 @@ function initGL() {
     surface = new Model('Surface');
     surface.BufferData(CreateSurfaceData());
 
-    stereoCamera = new StereoCameraObject(0.005, 1, gl.canvas.width / gl.canvas.height, deg2rad(50), 0.001, 30);
+    stereoCamera = new StereoCameraObject(0.005, 1, gl.canvas.width / gl.canvas.height, deg2rad(80), 0.001, 30);
     
-    background = new Model('Background');
-    background.BufferData({
-        vertexList: [
-            0,0,0,
-            1,0,0,
-            1,1,0,
-            1,1,0,
-            0,1,0,
-            0,0,0],
-        textureList: [
-            1,1,0,
-            1,0,0,
-            0,0,1,
-            0,1,1]
-        });
+
+    // background = new Model('Background');
+    // background.BufferData({
+    //     vertexList: [
+    //         0,0,0,
+    //         1,0,0,
+    //         1,1,0,
+    //         1,1,0,
+    //         0,1,0,
+    //         0,0,0],
+    //     textureList: [
+    //         1,1,0,
+    //         1,0,0,
+    //         0,0,1,
+    //         0,1,1]
+    //     });
     
+    sphere = new Model('Sphere');
+    sphere.BufferData(createSphere(0.2, 60, 60));
+
     LoadTexture();
 
     gl.enable(gl.DEPTH_TEST);
@@ -437,6 +512,10 @@ function init() {
     fov.addEventListener("input", getStereoCameraValues);
     near.addEventListener("input", getStereoCameraValues);
 
+    StartAudio();
+    sphereRotation(rotationTick, lengthOfRotation, distanceFromCenterX, distanceFromCenterZ, radius);
+    window.setInterval(() => draw(), 1000 / 15);
+
     infiniteDraw();
 }
 
@@ -527,3 +606,49 @@ const handleRequestButton = () => {
       handleDeviceOrientation();
     });
   };
+
+
+function AudioSetup() {
+  audio = document.getElementById('audio');
+
+  audio.addEventListener('play', () => {
+      if (!audioContext) {
+          audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          source = audioContext.createMediaElementSource(audio);
+          panner = audioContext.createPanner();
+          filter = audioContext.createBiquadFilter();
+
+          source.connect(panner);
+          panner.connect(filter);
+          filter.connect(audioContext.destination);
+
+          filter.type = 'highshelf';
+          filter.frequency.value = 500;
+          filter.gain.value = 10;
+          audioContext.resume();
+      }
+  })
+
+
+  audio.addEventListener('pause', () => {
+      console.log('pause');
+      audioContext.resume();
+  })
+}
+
+function StartAudio() {
+  AudioSetup();
+
+  let filterCheckbox = document.getElementById('filterCheckbox');
+  filterCheckbox.addEventListener('change', function() {
+      if (filterCheckbox.checked) {
+          panner.disconnect();
+          panner.connect(filter);
+          filter.connect(audioContext.destination);
+
+      } else {
+          panner.disconnect();
+          panner.connect(audioContext.destination);
+      }
+  });  
+}

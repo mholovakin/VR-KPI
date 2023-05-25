@@ -22,7 +22,7 @@
 <body onload="init()">
 
     <h2>VR Mykyta Holovakin TR-22mp</h2>
-    <h3>The Neovious' Surface with "Trackball" Mouse Rotation</h3>\
+    <h3>The Neovious' Surface with "Trackball" Mouse Rotation</h3>
 
     <div>
         <label for="eyeSeparation">eye separation</label>
@@ -46,12 +46,13 @@
       <label for="accelerometer-tangible-interface">Use device orientation (accelerometer)</label>
       <input id="accelerometer-tangible-interface" type="checkbox"/>
       <button id="request-accelerometer-tangible-interface">Request accelerometer</button>
+      <input type="checkbox" id="filterCheckbox" checked>Highshelf Filter</input>
   </div>
-    
   </div>
     <div id="canvas-holder">
         <canvas width="600" height="600" id="webglcanvas" style=""></canvas>
     </div>
-
+    <audio id="audio" src="music.mp3" controls crossorigin="anonymous"></audio>
+    
 </body>
 </html>
