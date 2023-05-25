@@ -609,11 +609,15 @@ const handleRequestButton = () => {
 
 
 function AudioSetup() {
+  
+}
+
+function StartAudio() {
   audio = document.getElementById('audio');
 
   audio.addEventListener('play', () => {
       if (!audioContext) {
-          audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          audioContext = new window.AudioContext();
           source = audioContext.createMediaElementSource(audio);
           panner = audioContext.createPanner();
           filter = audioContext.createBiquadFilter();
@@ -627,17 +631,13 @@ function AudioSetup() {
           filter.gain.value = 10;
           audioContext.resume();
       }
-  })
+  });
 
 
   audio.addEventListener('pause', () => {
       console.log('pause');
       audioContext.resume();
-  })
-}
-
-function StartAudio() {
-  AudioSetup();
+  });
 
   let filterCheckbox = document.getElementById('filterCheckbox');
   filterCheckbox.addEventListener('change', function() {
